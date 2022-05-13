@@ -1,0 +1,282 @@
+---
+title: "Final Project"
+author: "echen642, Ben, Maggie"
+date: "2/3/2022"
+output: html_document
+---
+
+# Loading Packages and Data
+
+## Loading packages
+
+```{r Load Packages, message=FALSE, warning=FALSE}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(ggmosaic)
+library(broom)
+```
+
+## Loading Data
+```{r Loading the Original Powerlifting Dataset, message=FALSE, warning = FALSE}
+powerlifting <- read_csv("openpowerlifting.csv")
+```
+
+# Filtering Data
+
+```{r Data Cleaning, message=FALSE}
+# The following lines of code will filter out 885,268 athletes 
+powerlifting.filtered = powerlifting %>%
+  filter(Best3DeadliftKg>0,  # Filters out failed deadlift attempts
+         !is.na(Best3DeadliftKg),   # Filters out athletes who didn't have any best deadlift attempts out of 3
+         !is.na(Age))          # Filters out athletes with no age labeled
+
+powerlifting.filtered = powerlifting.filtered %>%
+  filter(Age > 17.5)                          # Filters our athletes less than 18 years old
+
+
+# The following lines of code will filter out 333,784 athletes who are missing origin country info
+powerlifting.filtered = powerlifting.filtered %>%
+  filter(!is.na(Country))     # Filters out any athletes that don't have any country
+
+
+## Filtering out Failed Best Squat Attempt out of 3 and Missing Best Squat Attempts
+powerlifting.filtered = powerlifting.filtered %>%
+  filter(Best3SquatKg >0, !is.na(Best3SquatKg))
+
+
+## Filtering out Failed Best Bench Attempt out of 3 and Missing Best Bench Attempts
+powerlifting.filtered = powerlifting.filtered %>%
+  filter(Best3BenchKg >0, !is.na(Best3BenchKg))
+
+
+## Filtering out all other countries except for USA and Russia, any athletes 25 and under, as well as adding the BigLift variable
+powerlifting2.filtered = powerlifting.filtered %>%
+  filter(Age > 24, Age < 41, Country %in% c("USA", "Russia")) %>%
+  mutate(BigLift = Best3DeadliftKg >= mean(Best3DeadliftKg)) 
+
+## Number of cases in RQ1 dataset
+powerlifting.filtered %>%
+  nrow()
+
+## Number of cases in RQ2 dataset
+powerlifting2.filtered %>%
+  nrow()
+```
+
+
+# Graphical Representations and Numerical Summaries for RQ1
+
+## Numerical Summaries for the Explanatory and Outcome Variables
+```{r RQ1 Numerical Summaries Pt1, message=FALSE}
+powerlifting.filtered %>%
+  summarize(range(Age), median(Age), mean(Age), sd(Age), IQR(Age))
+
+powerlifting.filtered %>%
+  summarize(range(Best3DeadliftKg), median(Best3DeadliftKg), mean(Best3DeadliftKg), sd(Best3DeadliftKg), IQR(Best3DeadliftKg))
+
+powerlifting.filtered %>%
+  count(Equipment)
+
+powerlifting.filtered %>%
+  count(Sex)
+```
+
+## Best Deadlift Attempt out of 3 Vs Age Scatterplot's Numerical Summary
+```{r RQ1 Numerical Summary Pt2, message=FALSE}
+powerlifting.filtered %>%
+  group_by(Equipment) %>%
+  summarize(cor(Best3DeadliftKg, Age))     # Finds the correlation coefficient between "Best3DeadliftKg and "Age" among different equipment groups
+
+powerlifting.filtered %>%  # Finds the number of missing cases for each variable in the linear regression dataset
+  summarize_all(function(x) sum(is.na(x)))
+```
+
+## Best Deadlift Attempt out of 3 Vs Age Scatterplot
+```{r Deadlift vs Age Scatterplot, message=FALSE}
+# Using a sample of 7500 cases from the dataset that had deadlifts, age, and country filtered out, we create a scatterplot using the 2 quantitative variables "Best3DeadliftKg" and "Age", grouped by "Equipment".
+powerlifting.filtered %>%
+  sample_n(7500) %>%
+  ggplot(aes(x = Age, y = Best3DeadliftKg, color = Equipment)) + 
+  labs(x = "Age (in Years)", y = "Best Deadlift Attempt out of 3 (in Kg)") + # Labels the axis
+  geom_point(alpha = 0.2) + # Alpha is a variable that controls the transparency of the points(1 = opaque and 0 = transparent)
+  geom_smooth(se = FALSE, size = 1.5) + 
+  scale_color_viridis_d() # Changes the colors in the scatterplot (Scale color brewer)
+```
+
+## Multiple Linear Regression Model between Best3DeadliftKg and Age
+$$E[Best3DeadliftKg | Age, Equipment, Sex] = \beta_0 + \beta_1Age + \beta_2EquipmentRaw + \\ \beta_3EquipmentSinglePly + \beta_4EquipmentWraps + \beta_5SexMale$$
+
+## 95% Confidence Interval and P-values
+```{r RQ1 95% CI and P-Values, message=FALSE}
+linmod = lm(Best3DeadliftKg ~ Age + Equipment + Sex, data = powerlifting.filtered)
+tidy(linmod) # Let's us see the estimates of the coefficients and their p-values
+confint(linmod)  # Let's us see the 95% confidence intervals of the coefficients
+
+```
+
+## RQ1 Model Evaluation
+
+```{r RSquared and RSE, message=FALSE}
+glance(linmod)
+```
+
+### Plotting Residuals Against Fitted Values
+```{r RQ1 Residual Plots, message=FALSE}
+# residuals vs fitted values (Investigating the 2 plot groups)
+augment(linmod) %>%
+  ggplot(aes(y = .resid, x = .fitted, color = Sex)) + 
+  geom_point() + 
+  geom_smooth(se = FALSE) + # add smooth line (without gray uncertainty interval)
+  geom_hline(yintercept = 0) +  # add horizontal line at y = 0
+  labs(x = 'Fitted Values', y = 'Residuals', title = 'Residuals vs Fitted Values (Linear Model)') + # update axis labels
+  theme_classic() # classic theme
+
+# residuals vs fitted values
+augment(linmod) %>%
+  ggplot(aes(y = .resid, x = .fitted)) + 
+  geom_point() + 
+  geom_smooth(se = FALSE) + # add smooth line (without gray uncertainty interval)
+  geom_hline(yintercept = 0) +  # add horizontal line at y = 0
+  labs(x = 'Fitted Values', y = 'Residuals', title = 'Residuals vs Fitted Values (Linear Model)') + # update axis labels
+  theme_classic() # classic theme
+
+# residuals vs explanatory (age)
+augment(linmod) %>%
+  ggplot(aes(y = .resid, x = Age)) + 
+  geom_point() + 
+  geom_smooth(se = FALSE) + # add smooth line (without gray uncertainty interval)
+  geom_hline(yintercept = 0) + # add horizontal line at y = 0
+  labs(x = 'Age', y = 'Residuals', title = 'Residuals vs Age') + # update axis labels
+  theme_classic()
+
+# residuals vs explanatory (Equipment)
+augment(linmod) %>%
+  ggplot(aes(y = .resid, x = Equipment)) + 
+  geom_boxplot() + 
+  geom_smooth(se = FALSE) + # add smooth line (without gray uncertainty interval)
+  geom_hline(yintercept = 0) + # add horizontal line at y = 0
+  labs(x = 'Equipment', y = 'Residuals', title = 'Residuals vs Equipment') + # update axis labels
+  theme_classic()
+
+# residuals vs explanatory (Sex)
+augment(linmod) %>%
+  ggplot(aes(y = .resid, x = Sex)) + 
+  geom_boxplot() + 
+  geom_smooth(se = FALSE) + # add smooth line (without gray uncertainty interval)
+  geom_hline(yintercept = 0) + # add horizontal line at y = 0
+  labs(x = 'Sex', y = 'Residuals', title = 'Residuals vs Sex') + # update axis labels
+  theme_classic()
+
+# residual distribution
+augment(linmod) %>% 
+  ggplot(aes(x = .resid)) +
+  geom_histogram()
+```
+
+
+# Graphical Representations and Numerical Summaries for RQ2
+
+## Logistic Regression Model's Numerical Summaries
+```{r RQ2 Numerical Summaries, message=FALSE, warning=FALSE}
+# Center and spread of Age variable in the RQ2 Dataset
+powerlifting2.filtered %>%
+  summarize(range(Age), median(Age), mean(Age), sd(Age), IQR(Age))
+
+# Center and spread of Age variable between Russia and US
+powerlifting2.filtered %>%
+  group_by(Country) %>%
+  summarize(range(Age), median(Age), mean(Age), sd(Age), IQR(Age))
+
+# Number of Cases incapable/capable of BigLift
+powerlifting2.filtered %>%
+  count(BigLift)
+
+# Number of cases who Male or Female
+powerlifting2.filtered %>%
+  count(Sex)
+
+# Number of cases for each Equipment Group
+powerlifting2.filtered %>%
+  count(Equipment)
+
+# Number of cases from Russia and from USA
+powerlifting2.filtered %>%
+  count(Country)
+
+# Number of Missing Cases for Variables in Logistic Regression Dataset
+powerlifting2.filtered %>% 
+  summarize_all(function(x) sum(is.na(x)))
+```
+
+## Mosaic Plot of BigLift between U.S. and Russia
+```{r Mosaic Plot of BigLift between U.S and Russia, message=FALSE}
+powerlifting2.filtered %>%
+  ggplot() + 
+  geom_mosaic(aes(x = product(BigLift, Country), fill = BigLift)) +
+  facet_grid(. ~ Equipment)
+```
+
+## Logistic Regression Model
+$$Log(Odds(BigLift | Country, Age, Sex, Equipment)) = \beta_0 + \beta_1CountryUSA + \beta_2Age + \beta_3SexMale + \\ \beta_2EquipmentRaw + \beta_3EquipmentSinglePly + \beta_4EquipmentWraps$$
+
+
+## 95% Confidence Interval and P-Values
+```{r 95% CI and P-Values, message=FALSE}
+logMod = glm(BigLift ~ Country + Age + Sex + Equipment, family = binomial, data = powerlifting2.filtered)
+confint(logMod) %>%
+  exp()     # Let's us see the exponentiated 95% confidence interval
+tidy(logMod)  # Let's us see the p-values of the coefficents
+```
+
+## Logistic Regression Model's Exponentiated Coefficients
+```{r US Deadlift vs Other Countries Deadlift and Numerical Summaries, message=FALSE}
+logMod %>%
+  coef() %>%
+  exp()  # Let's us see the exponentiated estimates of the coefficients
+```
+
+## RQ2 Model Evaluation
+```{r Log Model Evaluation, message=FALSE}
+threshold <- 0.25
+
+augment(logMod, type.predict ='response') %>% ## get predicted probabilities from model
+  ggplot(aes(y = .fitted, x = BigLift)) + ## compare predicted probabilites to actual outcome
+  geom_boxplot() + 
+  ylab("Predicted Probability of Picking a Powerlifter who can BigLift") + 
+  xlab("Actual Outcome (1 = Can BigLift, 0 = Can't BigLift)") + 
+  theme_classic() + 
+  ggtitle('Predictions from Log Mod') +
+  geom_hline(yintercept = threshold, color = "red", linetype = 2) +
+  facet_wrap(.~Country)
+  
+  
+logMod %>%
+  augment(type.predict = "response") %>%
+  group_by(Country, BigLift) %>%
+  summarize(median(.fitted))
+
+logMod %>%
+  augment(type.predict = "response") %>%
+  group_by(Country, BigLift) %>% 
+  mutate(predictBigLift = .fitted >= threshold) %>% 
+  count(predictBigLift, BigLift) %>% 
+  mutate(correct = (BigLift == predictBigLift)) %>% 
+  mutate(prop = n/sum(n)) #Specificity, False Positive Rate, False Negative Rate, Sensitivity
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
