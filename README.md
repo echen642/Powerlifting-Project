@@ -1,0 +1,2 @@
+# Powerlifting-Project
+A joint collaboration with Ben and Maggie on our questions on powerlifting. Our research questions were ‘What is the relationship between the age of a powerlifter and their deadlift weight?’ and ‘Are powerlifters who can deadlift (in kg) more than the average powerlifter more likely to come from the United States or from Russia?’. We got our data from Kaggle which got its data from the OpenPowerlifting dataset. (https://www.kaggle.com/open-powerlifting/powerlifting-database)
